@@ -8,7 +8,6 @@ Created on Fri May 17 17:43:57 2024
 
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 import warnings
 import os
 from scipy.interpolate import RegularGridInterpolator
@@ -37,20 +36,20 @@ class MESA:
         self.M_sun = 1.989e30  # Mass of the Sun kg
 
         #Initial conditions
-        self.rho0 = 1.0 *  1.42e-7 * 1.408e3  # initial density of sun kg/m3
-        self.T0 = 1.0 * 5770  # initial temperature k
-        self.P0 = 1.0 * self.pressure(self.T0, self.rho0) # initial pressure (ideal gas law)
-        self.L0 = 1.0 * self.L_sun  # initial luminosity
-        self.R0 = 1.0 * self.R_sun 
-        self.M0 = 1.0 * self.M_sun
-        
-        # best model
-        # self.rho0 = 2 *  1.42e-7 * 1.408e3  # initial density of sun kg/m3
+        # self.rho0 = 1.0*  1.42e-7 * 1.408e3  # initial density of sun kg/m3
         # self.T0 = 1.0 * 5770  # initial temperature k
         # self.P0 = 1.0 * self.pressure(self.T0, self.rho0) # initial pressure (ideal gas law)
         # self.L0 = 1.0 * self.L_sun  # initial luminosity
-        # self.R0 = 0.9* self.R_sun 
+        # self.R0 = 1.0 * self.R_sun 
         # self.M0 = 1.0 * self.M_sun
+        
+        # best model
+        self.rho0 = 2.0 *  1.42e-7 * 1.408e3  # initial density of sun kg/m3
+        self.T0 = 1.0 * 5770  # initial temperature k
+        self.P0 = 1.0 * self.pressure(self.T0, self.rho0) # initial pressure (ideal gas law)
+        self.L0 = 1.0 * self.L_sun  # initial luminosity
+        self.R0 = 1.0* self.R_sun 
+        self.M0 = 1.0 * self.M_sun
         #other coeffiecents 
         self.Cp = (5*self.k_B)/(2*self.mu * self.M_h)
         #see how many euler steps with plot over
@@ -320,27 +319,20 @@ class MESA:
         
 
         Returns
+         Numpy Arrays of integrated parameters see below
+        
         -------
-        rho : TYPE
-            DESCRIPTION.
-        T : TYPE
-            DESCRIPTION.
-        P : TYPE
-            DESCRIPTION.
-        r : TYPE
-            DESCRIPTION.
-        L : TYPE
-            DESCRIPTION.
-        m : TYPE
-            DESCRIPTION.
-        nabla : TYPE
-            DESCRIPTION.
-        nabla_stable : TYPE
-            DESCRIPTION.
-        nabla_ad : TYPE
-            DESCRIPTION.
-        nabla_star : TYPE
-            DESCRIPTION.
+        rho : density- kg/m3
+        
+        T : Temperature K.
+        
+        P : Pressure kg/(m * s2).
+        L : Luminsoty (J/s).
+        m : Mass kg.
+        nabla : Temperature gradient - unitless
+        nabla_stable : Radiative gradient - unitless
+        nabla_ad : adiabatic gradient - unitless.
+        nabla_star : polynomial gradient - unitless
 
         '''
             N = 10000
@@ -353,8 +345,7 @@ class MESA:
             nabla, nabla_ad, nabla_stable,nabla_star = np.zeros(N),np.zeros(N),np.zeros(N),np.zeros(N)
             nabla_ad[0], nabla_stable[0],nabla_star[0] =self.nabla_ad(T[0],rho[0],P[0]), self.nabla_stable(T[0],rho[0],L[0],r[0],m[0],P[0]),self.nabla_star(T[0], rho[0], P[0], m[0], r[0], L[0])
             #again for Flux convective
-            F_c = np.zeros(N)
-            F_c[0] = self.flux(L[0],r[0])
+
             for i in range(N-1):
                 
             #first make sure m does get too small
@@ -402,8 +393,7 @@ class MESA:
                     m[i+1] = m[i] - dm
                     rho[i+1] = self.rho(P[i+1],T[i+1])
                     #update flux:
-                    F_c[i+1] = self.flux(L[i],r[i])
-            return rho,T,P,r,L,m,nabla,nabla_stable, nabla_ad,nabla_star, F_c
+            return rho,T,P,r,L,m,nabla,nabla_stable, nabla_ad,nabla_star
     def plotting(self,rho,T,P,r,L,mass):
             '''
         
@@ -511,14 +501,20 @@ class MESA:
             print(f'Theoretical : {obs}, Interpolated : {exp:.3f}, Percentage error,{percent:.3f}%')
             
         return kappa_analytic, percent_arr
-    def flux(self,L,r):
-        '''
-        r, L - same as above:
-            
-        Calculate the Flux at point r with luminosity L
-        '''
-        return L/(4 * np.pi * r**2)
+
     def plot_nabla(self,r,nabla_ad, nabla_star,nabla_stable):
+        '''
+        
+
+        Parameters
+        ----------
+        r,nabla_ad,nabla_star,nabla_stable - Numpy arrays of parameters returned from 
+        euler()
+
+         Plots are generated for entire star
+         Returns
+         Plot of temperature gradietns over radius 
+        '''
         plt.plot(r/self.R_sun, nabla_ad, label=r'$\nabla_{ad}$')
         plt.plot(r/self.R_sun, nabla_star, label=r'$\nabla_{*}$')
         plt.plot(r/self.R_sun, nabla_stable, label=r'$\nabla_{stable}$')
@@ -529,6 +525,33 @@ class MESA:
         plt.yscale('log')
         plt.show()
     def cross_section(self,L,R,nabla_stable,nabla_ad):
+        '''
+        
+
+        Parameters
+        ----------
+       L,R,nabla_stable,nabla_ad- numpy arrays of  integrated by euler method 
+       
+       Plot regions based on luminosity and gradient conditoins
+       
+       For outside the core
+       convection is where nabla_stable> nabla_ad- red
+           Dominates surface
+       
+       Raditation where nabla_stable < nabla_ad - yellow
+           Dominates shells
+       
+       For inside the core- luminosity is smaller than L_max
+       convection where nabla_stable> nabla_ad-  cyan
+           Dominates outer core
+       
+        Raditation where nabla_stable < nabla_ad - blue
+            Dominates inner core
+           
+
+        Return:
+            Cross section plot of radaiative and convective zones in star
+        '''
         L_max = 0.995 *self.L_sun
 
         R_sun = self.R0
@@ -549,10 +572,12 @@ class MESA:
                     yellow_circle = plt.Circle((0,0),R[i]/R_sun,fc='yellow',fill=True,ec=None)
                     ax.add_patch(yellow_circle)
             elif L[i] <= L_max:
+                #convective core
                 if nabla_stable[i] > nabla_ad[i]:
                     cyan_circle = plt.Circle((0,0), R[i]/R_sun, fc='blue',fill=True,ec=None)
                     ax.add_patch(cyan_circle)
                 else:
+                    #radiative core
                     blue_circle = plt.Circle((0,0), R[i]/R_sun, fc='cyan',fill=True,ec=None)
                     ax.add_patch(blue_circle)
     
@@ -589,14 +614,14 @@ opacity_compare = [-1.55,-1.51,-1.57,-1.61,-1.67,-1.33,-1.20,-1.02,-1.39,-1.35,-
 
 if __name__ == "__main__":
     makestar = MESA(opacity,epsilon)
-    initial_conditions_opacity = makestar.opacity(opacity,5700,rho_sun)
+    initial_conditions_opacity = makestar.opacity(opacity,5770,rho_sun)
     
-    rho,T,P,r,L,Mass,nabla,nabla_stable,nabla_ad,nabla_star, F_c = makestar.euler()
+    rho,T,P,r,L,Mass,nabla,nabla_stable,nabla_ad,nabla_star, = makestar.euler()
     
     makestar.plotting(rho,T,P,r,L,Mass)
     makestar.cross_section(L, r ,nabla_stable, nabla_ad)
-    #kappa_check = makestar.sanity(opacity,opacity_compare,label='Opacity')
-    #epsilon_check = makestar.sanity(epsilon,epsilon_compare,label = 'epsilon')
+    kappa_check = makestar.sanity(opacity,opacity_compare,label='Opacity')
+    epsilon_check = makestar.sanity(epsilon,epsilon_compare,label = 'Epsilon')
     makestar.plot_nabla(r,nabla_ad,nabla_star,nabla_stable)
     
 
