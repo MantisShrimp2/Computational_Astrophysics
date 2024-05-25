@@ -3,7 +3,7 @@
 """
 Created on Fri May 17 17:43:57 2024
 
-@author: karan
+@author: Karan Kumar
 """
 
 import numpy as np
@@ -44,15 +44,15 @@ class MESA:
         # self.M0 = 1.0 * self.M_sun
         
         # best model
-        self.rho0 = 2.0 *  1.42e-7 * 1.408e3  # initial density of sun kg/m3
-        self.T0 = 1.0 * 5770  # initial temperature k
-        self.P0 = 1.0 * self.pressure(self.T0, self.rho0) # initial pressure (ideal gas law)
+        self.rho0 = 50 *  1.42e-7 * 1.408e3  # initial density of sun kg/m3
+        self.T0 = 1.0 * 5770.0  # initial temperature k
+        self.P0 = 10.0 * self.pressure(self.T0, self.rho0) # initial pressure (ideal gas law)
         self.L0 = 1.0 * self.L_sun  # initial luminosity
         self.R0 = 1.0* self.R_sun 
         self.M0 = 1.0 * self.M_sun
         #other coeffiecents 
         self.Cp = (5*self.k_B)/(2*self.mu * self.M_h)
-        #see how many euler steps with plot over
+        #see how many euler steps we integrate over
         self.end_step = 0
 
     def opacity(self, filename,T,rho):
@@ -95,7 +95,7 @@ class MESA:
             #convert all to numpy arrays
         logT = np.array(logT)
         logK = np.array(logK)
-
+    
         interpolate = RegularGridInterpolator((logT,logR),logK,method='linear' 
                                                   ,bounds_error=False, 
                                                   fill_value=None)
@@ -238,8 +238,6 @@ class MESA:
         lm = scale_height
         omega = 4/lm
         #solve nablas
-        # nab_ad = self.nabla_ad(T,rho,P)
-        # nab_stab = nabla_stable
         #define each coefficent
         A = 1
         B = (U/lm**2)
@@ -258,17 +256,18 @@ class MESA:
                 break
         nabla_star = (eta_star**2) + (U*omega/lm)*eta_star + nab_ad
         return nabla_star
-    def nabla_stable(self,T,rho,L,r,m,P):
+    def nabla_stable(self,T,rho,L,r,m):
             '''
         
 
         Parameters
         ----------
-        T,rho,P,m,r,L same as above
+        T,rho,m,r,L same as above
         Returns
         -------
         radiative temperature gradient.
 
+        # best model
         '''
             grav  = self.gravity(m, r)
             scale_height = (self.k_B * T)/(self.mu * self.M_h *grav)
@@ -303,7 +302,7 @@ class MESA:
         Pressure at point T, rho SI units
 
         '''
-            t4 = (4*self.stefan) * T ** 4/(3*self.c)
+            t4 = (4*self.stefan) * (T ** 4) /(3*self.c)
             t1 = (rho * self.k_B * T)/(self.mu*self.M_h) 
             return t4 + t1
     def euler(self):
@@ -343,9 +342,9 @@ class MESA:
             #start from the surface and integreate inside`
             #same for the nablas
             nabla, nabla_ad, nabla_stable,nabla_star = np.zeros(N),np.zeros(N),np.zeros(N),np.zeros(N)
-            nabla_ad[0], nabla_stable[0],nabla_star[0] =self.nabla_ad(T[0],rho[0],P[0]), self.nabla_stable(T[0],rho[0],L[0],r[0],m[0],P[0]),self.nabla_star(T[0], rho[0], P[0], m[0], r[0], L[0])
+            nabla_ad[0], nabla_stable[0], =self.nabla_ad(T[0],rho[0],P[0]), self.nabla_stable(T[0],rho[0],L[0],r[0],m[0])
             #again for Flux convective
-
+            nabla_star[0] = self.nabla_star(T[0], rho[0],m[0],r[0],nabla_stable[0],nabla_ad[0])
             for i in range(N-1):
                 
             #first make sure m does get too small
@@ -355,18 +354,19 @@ class MESA:
                     break
                 else:
                     #euler time
-                    #kappa = self.opacity(self.opacity_file, T[i],rho[i])**3
+                   
                     #calculate nablas
-                    nabla_stable[i] = self.nabla_stable(T[i],rho[i],L[i],r[i],m[i],P[i])
+                    nabla_stable[i] = self.nabla_stable(T[i],rho[i],L[i],r[i],m[i])
                     nabla_ad[i] = self.nabla_ad(T[i],rho[i],P[i])
-                    nabla_star[i] = self.nabla_star(T[i], rho[i],m[i],rho[i],nabla_stable[i],nabla_ad[i])
+                    nabla_star[i] = self.nabla_star(T[i],rho[i],m[i],r[i],nabla_stable[i],nabla_ad[i])
+                    #this is opposite of actual schwarzschild but it helps me remeber
                     
                     self.schwarzschild = nabla_stable[i] > nabla_ad[i]
                     #temperature gradient check
                     
                     if self.schwarzschild: #if true
                     #store the unstable value
-                        nabla[i] = self.nabla_star(T[i], rho[i],m[i],rho[i],nabla_stable[i],nabla_ad[i])
+                        nabla[i] = self.nabla_star(T[i], rho[i],m[i],r[i],nabla_stable[i],nabla_ad[i])
                         #calculate what way the stepsize goes
                         dt = nabla_star[i]*(T[i]/P[i])*self.dpdm(m[i],r[i])
                     else:
@@ -383,16 +383,14 @@ class MESA:
                     dm  = np.min(per * V/f)
                 
             
-                   # print(self.dpdm(m[i],r[i]))
                                
                     #subtract since we're starting form surface
                     r[i+1] = r[i] - self.drdm(r[i],rho[i])*dm
                     T[i+1] = T[i] - (dt*dm) #(dt/dm * dm)
                     L[i+1] = L[i] - self.dldm(T[i],rho[i])* dm
-                    P[i+1] = P[i] - self.dpdm(m[i],r[i])*dm
+                    P[i+1] = self.pressure(T[i], rho[i]) - self.dpdm(m[i],r[i])*dm
                     m[i+1] = m[i] - dm
                     rho[i+1] = self.rho(P[i+1],T[i+1])
-                    #update flux:
             return rho,T,P,r,L,m,nabla,nabla_stable, nabla_ad,nabla_star
     def plotting(self,rho,T,P,r,L,mass):
             '''
@@ -407,24 +405,24 @@ class MESA:
         Normalized plots of each parameter WRT Radius (R)
 
         '''
-            plt.figure(figsize=(10, 6))
+            plt.figure(figsize=(12, 10))
             plt.suptitle("Best Fit Euler Model for N= "+str(self.end_step)+" steps ")
             plt.subplot(2, 2, 1)
             plt.plot(r[0:self.end_step] / self.R_sun, mass[0:self.end_step]/ self.M_sun)
             plt.xlabel(r'Radius $R/R_{sun}$')
-            plt.ylabel('Mass [M/M_sun]')
+            plt.ylabel(r'Mass $M/M_{sun}$')
             plt.title('Mass over Radius')
 
             plt.subplot(2, 2, 2)
             plt.plot(r[0:self.end_step] / self.R_sun, P[0:self.end_step]/self.P0)
             plt.xlabel(r'Radius $R/R_{sun}$')
-            plt.ylabel('Pressure [cgs]')
+            plt.ylabel(r'Pressure $P/P_{0}')
             plt.title('Pressure over Radius')
 
             plt.subplot(2, 2, 3)
             plt.plot(r[0:self.end_step] / self.R_sun, L[0:self.end_step] / self.L0)
             plt.xlabel(r'Radius $R/R_{sun}$')
-            plt.ylabel('Luminosity [L/L_sun]')
+            plt.ylabel(r'Luminosity $L/L_{sun}$')
             plt.title('Luminosity over Radius')
 
             plt.subplot(2, 2, 4)
@@ -498,7 +496,10 @@ class MESA:
             err = np.abs((obs-exp)/exp)
             percent = err * 100
             percent_arr.append(percent)
-            print(f'Theoretical : {obs}, Interpolated : {exp:.3f}, Percentage error,{percent:.3f}%')
+            print(f'Theoretical : {obs}, Interpolated : {exp:.3f}, Relative error,{percent:.3f}%')
+            if percent > 5.0:
+                #run a warning if the sanity check is not withing 5% of the accepted values
+                warnings.warn("Sanity check for "+label+'failed')
             
         return kappa_analytic, percent_arr
 
@@ -519,12 +520,12 @@ class MESA:
         plt.plot(r/self.R_sun, nabla_star, label=r'$\nabla_{*}$')
         plt.plot(r/self.R_sun, nabla_stable, label=r'$\nabla_{stable}$')
         plt.legend()
-        plt.title("temperature Gradients over Radius")
+        plt.title("Temperature Gradients over Radius")
         plt.xlabel(r'$R / R_{\odot}$')
         plt.ylabel(r'$\nabla$')
         plt.yscale('log')
         plt.show()
-    def cross_section(self,L,R,nabla_stable,nabla_ad):
+    def cross_section(self,R,nabla_stable,nabla_ad):
         '''
         
 
@@ -561,11 +562,13 @@ class MESA:
         ax = plt.gca()
         ax.set_xlim(rmin,rmax)
         ax.set_ylim(rmin,rmax)
+        convective_zone = []
+        core_convective_zone = []
         for i in range(0, n-1):
             if L[i] >= L_max:
                 #if convection
                 if nabla_stable[i] > nabla_ad[i]:
-                 
+                    convective_zone.append(R[i])
                     red_circle = plt.Circle((0,0),R[i]/R_sun,fc='red',fill=True,ec=None)
                     ax.add_patch(red_circle)
                 else: #radiative trasport
@@ -574,6 +577,7 @@ class MESA:
             elif L[i] <= L_max:
                 #convective core
                 if nabla_stable[i] > nabla_ad[i]:
+                    core_convective_zone.append(R[i])
                     cyan_circle = plt.Circle((0,0), R[i]/R_sun, fc='blue',fill=True,ec=None)
                     ax.add_patch(cyan_circle)
                 else:
@@ -583,7 +587,15 @@ class MESA:
     
                     core = plt.Circle((0,0), R[self.end_step]/R_sun,fc='white',fill=True,ec=None,lw=0)
                     ax.add_patch(core)
-        plt.title("Cross Section of Star")
+        #see how large the convetive zone is by the number of steps inwards
+        convective_zone = np.array(convective_zone)
+        convective_length = round(np.min(convective_zone)/R[self.end_step],2)
+        convective_length = str(convective_length)        
+        
+        core_convective_length = round(np.max(core_convective_zone)/R[0]*100,2)
+        core_convective_length = str(core_convective_length)
+        plt.suptitle("Cross Section of Star")
+        plt.title(r"Surface Convection= "+convective_length+"% $r_0$ " +  "Core Convection = "+core_convective_length+'% $r_0$')
         plt.tight_layout()
         #add a legend
         ax.legend([red_circle,yellow_circle,cyan_circle,blue_circle], ['Convection outside Core','Radiation Outside Core','Core Radiation','Core Convection'],loc='upper right')
@@ -591,12 +603,31 @@ class MESA:
         plt.xlabel(r'$ R/R_{sun}$')
         plt.ylabel(r'$ R/R_{sun}$')
         plt.show()
-            
-                    
+        
+      
                 
         return None
-        
 
+    def final_params(self,L,m,r):
+        '''
+        Return the final values fo rluminosity, mass and radius from euler method
+        should be zero or 5% of input parameters
+
+        Parameters
+        ----------
+        L,m,r - array of luminosity, mass and radius from euler method
+
+        Returns
+        -------
+        print last index of each array
+
+        '''
+        last_L = np.min(L)
+        #why -1, skip the lowest due to minimum mass threshold- true lowest is invalid mass
+        last_m = m[-1]
+        last_r = np.min(r)
+        print(f"Final Luminosity: {last_L:.3f}, Final Mass: {last_m:.3f}, Final Radius: {last_r:.3f}")
+        return None
                     
                     
                     
@@ -614,16 +645,17 @@ opacity_compare = [-1.55,-1.51,-1.57,-1.61,-1.67,-1.33,-1.20,-1.02,-1.39,-1.35,-
 
 if __name__ == "__main__":
     makestar = MESA(opacity,epsilon)
-    initial_conditions_opacity = makestar.opacity(opacity,5770,rho_sun)
+   # initial_conditions_opacity = makestar.opacity(opacity,5770,rho_sun)
     
     rho,T,P,r,L,Mass,nabla,nabla_stable,nabla_ad,nabla_star, = makestar.euler()
     
     makestar.plotting(rho,T,P,r,L,Mass)
-    makestar.cross_section(L, r ,nabla_stable, nabla_ad)
+    makestar.cross_section(r ,nabla_stable, nabla_ad)
+
     kappa_check = makestar.sanity(opacity,opacity_compare,label='Opacity')
     epsilon_check = makestar.sanity(epsilon,epsilon_compare,label = 'Epsilon')
     makestar.plot_nabla(r,nabla_ad,nabla_star,nabla_stable)
-    
-
+    #check final parameters
+    makestar.final_params(L,Mass, r)
 
         
