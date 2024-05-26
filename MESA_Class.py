@@ -43,11 +43,11 @@ class MESA:
         # self.R0 = 1.0 * self.R_sun 
         # self.M0 = 1.0 * self.M_sun
         
-        # best model
+        #best model
         self.rho0 = 50 *  1.42e-7 * 1.408e3  # initial density of sun kg/m3
         self.T0 = 1.0 * 5770.0  # initial temperature k
-        self.P0 = 10.0 * self.pressure(self.T0, self.rho0) # initial pressure (ideal gas law)
-        self.L0 = 1.0 * self.L_sun  # initial luminosity
+        self.P0 = 20.0 * self.pressure(self.T0, self.rho0) # initial pressure (ideal gas law)
+        self.L0 = 1.0* self.L_sun  # initial luminosity
         self.R0 = 1.0* self.R_sun 
         self.M0 = 1.0 * self.M_sun
         #other coeffiecents 
@@ -410,25 +410,25 @@ class MESA:
             plt.subplot(2, 2, 1)
             plt.plot(mass[0:self.end_step] / self.M_sun, r[0:self.end_step]/ self.R_sun)
             plt.xlabel(r'Mass $M/M_{sun}$')
-            plt.ylabel(r'Radius $R/R_{sun}$')
+            plt.ylabel(r'$R/R_{sun}$')
             plt.title('Radius over Mass')
 
             plt.subplot(2, 2, 2)
             plt.plot(mass[0:self.end_step] / self.M_sun, P[0:self.end_step]/self.P0)
             plt.xlabel(r'Mass $M/M_{sun}$')
-            plt.ylabel(r'Pressure $P/P_{0}')
+            plt.ylabel(r'$P/P_{0}$')
             plt.title('Pressure over Mass')
 
             plt.subplot(2, 2, 3)
             plt.plot(mass[0:self.end_step] / self.M_sun, L[0:self.end_step] / self.L0)
             plt.xlabel(r'Mass $M/M_{sun}$')
-            plt.ylabel(r'Luminosity $L/L_{sun}$')
+            plt.ylabel(r'$L/L_{sun}$')
             plt.title('Luminosity over Mass')
 
             plt.subplot(2, 2, 4)
             plt.plot(mass[0:self.end_step] / self.M_sun, T[0:self.end_step]/self.T0)
             plt.xlabel(r'Mass $M/M_{sun}$')
-            plt.ylabel(r'$T/T_0$ ')
+            plt.ylabel(r'$T/T_{sun}$ ')
             plt.title('Temperature over Mass')
 
             plt.tight_layout()
@@ -562,22 +562,23 @@ class MESA:
         ax = plt.gca()
         ax.set_xlim(rmin,rmax)
         ax.set_ylim(rmin,rmax)
-        convective_zone = []
-        core_convective_zone = []
+        surface_convective = 0
+        core_convective = []
         for i in range(0, n-1):
             if L[i] >= L_max:
                 #if convection
                 if nabla_stable[i] > nabla_ad[i]:
-                    convective_zone.append(R[i])
+                  
                     red_circle = plt.Circle((0,0),R[i]/R_sun,fc='red',fill=True,ec=None)
                     ax.add_patch(red_circle)
+                    surface_convective = i
                 else: #radiative trasport
                     yellow_circle = plt.Circle((0,0),R[i]/R_sun,fc='yellow',fill=True,ec=None)
                     ax.add_patch(yellow_circle)
             elif L[i] <= L_max:
                 #convective core
                 if nabla_stable[i] > nabla_ad[i]:
-                    core_convective_zone.append(R[i])
+                    core_convective.append(R[i])
                     cyan_circle = plt.Circle((0,0), R[i]/R_sun, fc='blue',fill=True,ec=None)
                     ax.add_patch(cyan_circle)
                 else:
@@ -588,14 +589,12 @@ class MESA:
                     core = plt.Circle((0,0), R[self.end_step]/R_sun,fc='white',fill=True,ec=None,lw=0)
                     ax.add_patch(core)
         #see how large the convetive zone is by the number of steps inwards
-        convective_zone = np.array(convective_zone)
-        convective_length = round(np.min(convective_zone)/R[self.end_step],2)
-        convective_length = str(convective_length)        
+        convective_length = (R[0] - R[surface_convective])/R[0] * 100
         
-        core_convective_length = round(np.max(core_convective_zone)/R[0]*100,2)
-        core_convective_length = str(core_convective_length)
+        #had trouble with this one
+        core_convective_length = np.max(core_convective)/R[0]*100
         plt.suptitle("Cross Section of Star")
-        plt.title(r"Surface Convection= "+convective_length+"% $r_0$ " +  "Core Convection = "+core_convective_length+'% $r_0$')
+        plt.title(f'Surface Convection= {convective_length:.1f}% of R_0   Core Convection =  {core_convective_length:.3f}% of R_0')
         plt.tight_layout()
         #add a legend
         ax.legend([red_circle,yellow_circle,cyan_circle,blue_circle], ['Convection outside Core','Radiation Outside Core','Core Radiation','Core Convection'],loc='upper right')
@@ -622,16 +621,16 @@ class MESA:
         print last index of each array
 
         '''
-        last_L = np.min(L)
+        last_L = L[self.end_step]/self.L0
         #why -1, skip the lowest due to minimum mass threshold- true lowest is invalid mass
-        last_m = m[-1]
-        last_r = np.min(r)
+        last_m = m[self.end_step-1]/self.M0
+        last_r = r[self.end_step]/self.R0
         print(f"Final Luminosity: {last_L:.3f}, Final Mass: {last_m:.3f}, Final Radius: {last_r:.3f}")
         return None
                     
                     
                     
-            
+#CHANGE THIS            
 current_directory = '/home/karan/Documents/UvA/Computational Astrophysics/stellar-structure/'
 opacity = os.path.join(current_directory,'opacity.txt')
 epsilon = os.path.join(current_directory,'epsilon.txt')
