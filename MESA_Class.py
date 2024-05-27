@@ -597,7 +597,7 @@ class MESA:
         plt.title(f'Surface Convection= {convective_length:.1f}% of R_0   Core Convection =  {core_convective_length:.3f}% of R_0')
         plt.tight_layout()
         #add a legend
-        ax.legend([red_circle,yellow_circle,cyan_circle,blue_circle], ['Convection outside Core','Radiation Outside Core','Core Radiation','Core Convection'],loc='upper right')
+        ax.legend([red_circle,yellow_circle,blue_circle,cyan_circle], ['Convection outside Core','Radiation Outside Core','Core Radiation','Core Convection'],loc='upper right')
         # Show all plots
         plt.xlabel(r'$ R/R_{sun}$')
         plt.ylabel(r'$ R/R_{sun}$')
